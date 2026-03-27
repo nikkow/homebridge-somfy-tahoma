@@ -1,148 +1,192 @@
 import type { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 
-import type { ExampleHomebridgePlatform } from './platform.js';
+import type { SomfyTahomaPlatform } from './platform.js';
+import type { SomfyAccessoryContext } from './platformTypes.js';
+import { mapGarageDoorState, mapRollerShutterState } from './tahoma/stateMapper.js';
+import type { TahomaState } from './tahoma/types.js';
 
-/**
- * Platform Accessory
- * An instance of this class is created for each accessory your platform registers
- * Each accessory may expose multiple services of different service types.
- */
-export class ExamplePlatformAccessory {
+export class SomfyTahomaAccessory {
   private service: Service;
+  private context: SomfyAccessoryContext;
 
-  /**
-   * These are just used to create a working example
-   * You should implement your own code to track the state of your accessory
-   */
-  private exampleStates = {
-    On: false,
-    Brightness: 100,
-  };
+  private rollerCurrentPosition = 0;
+  private rollerTargetPosition = 0;
+  private rollerPositionState: CharacteristicValue;
+
+  private garageCurrentDoorState: CharacteristicValue;
+  private garageTargetDoorState: CharacteristicValue;
 
   constructor(
-    private readonly platform: ExampleHomebridgePlatform,
+    private readonly platform: SomfyTahomaPlatform,
     private readonly accessory: PlatformAccessory,
   ) {
-    // set accessory information
+    this.context = accessory.context.device as SomfyAccessoryContext;
+    this.rollerPositionState = this.platform.Characteristic.PositionState.STOPPED;
+    this.garageCurrentDoorState = this.platform.Characteristic.CurrentDoorState.STOPPED;
+    this.garageTargetDoorState = this.platform.Characteristic.TargetDoorState.CLOSED;
+
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Default-Manufacturer')
-      .setCharacteristic(this.platform.Characteristic.Model, 'Default-Model')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, 'Default-Serial');
+      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Somfy')
+      .setCharacteristic(this.platform.Characteristic.Model, this.context.controllableName ?? this.context.kind)
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, this.context.deviceURL);
 
-    // get the LightBulb service if it exists, otherwise create a new LightBulb service
-    // you can create multiple services for each accessory
+    this.service = this.ensureService();
+    this.configureHandlers();
+  }
 
-    if (accessory.context.device.CustomService) {
-      // This is only required when using Custom Services and Characteristics not support by HomeKit
-      this.service = this.accessory.getService(this.platform.CustomServices[accessory.context.device.CustomService]) ||
-        this.accessory.addService(this.platform.CustomServices[accessory.context.device.CustomService]);
-    } else {
-      this.service = this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
+  updateContext(context: SomfyAccessoryContext): void {
+    this.context = context;
+    this.accessory.context.device = context;
+    this.service = this.ensureService();
+    this.configureHandlers();
+  }
+
+  updateStates(states: TahomaState[]): void {
+    if (this.context.kind === 'rollerShutter') {
+      const mapped = mapRollerShutterState(states);
+
+      this.rollerCurrentPosition = mapped.currentPosition;
+      this.rollerTargetPosition = mapped.targetPosition;
+      this.rollerPositionState = mapped.positionState === 'increasing'
+        ? this.platform.Characteristic.PositionState.INCREASING
+        : mapped.positionState === 'decreasing'
+          ? this.platform.Characteristic.PositionState.DECREASING
+          : this.platform.Characteristic.PositionState.STOPPED;
+
+      this.service
+        .updateCharacteristic(this.platform.Characteristic.CurrentPosition, this.rollerCurrentPosition)
+        .updateCharacteristic(this.platform.Characteristic.TargetPosition, this.rollerTargetPosition)
+        .updateCharacteristic(this.platform.Characteristic.PositionState, this.rollerPositionState);
+
+      return;
     }
 
-    // set the service name, this is what is displayed as the default name on the Home app
-    // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
-    this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.exampleDisplayName);
+    const mapped = mapGarageDoorState(states);
+    this.garageCurrentDoorState = this.toGarageCurrentDoorState(mapped.currentDoorState);
+    this.garageTargetDoorState = this.toGarageTargetDoorState(mapped.targetDoorState);
 
-    // each service must implement at-minimum the "required characteristics" for the given service type
-    // see https://developers.homebridge.io/#/service/Lightbulb
-
-    // register handlers for the On/Off Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.On)
-      .onSet(this.setOn.bind(this)) // SET - bind to the `setOn` method below
-      .onGet(this.getOn.bind(this)); // GET - bind to the `getOn` method below
-
-    // register handlers for the Brightness Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-      .onSet(this.setBrightness.bind(this)); // SET - bind to the `setBrightness` method below
-
-    /**
-     * Creating multiple services of the same type.
-     *
-     * To avoid "Cannot add a Service with the same UUID another Service without also defining a unique 'subtype' property." error,
-     * when creating multiple services of the same type, you need to use the following syntax to specify a name and subtype id:
-     * this.accessory.getService('NAME') || this.accessory.addService(this.platform.Service.Lightbulb, 'NAME', 'USER_DEFINED_SUBTYPE_ID');
-     *
-     * The USER_DEFINED_SUBTYPE must be unique to the platform accessory (if you platform exposes multiple accessories, each accessory
-     * can use the same subtype id.)
-     */
-
-    // Example: add two "motion sensor" services to the accessory
-    const motionSensorOneService = this.accessory.getService('Motion Sensor One Name')
-      || this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor One Name', 'YourUniqueIdentifier-1');
-
-    const motionSensorTwoService = this.accessory.getService('Motion Sensor Two Name')
-      || this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor Two Name', 'YourUniqueIdentifier-2');
-
-    /**
-     * Updating characteristics values asynchronously.
-     *
-     * Example showing how to update the state of a Characteristic asynchronously instead
-     * of using the `on('get')` handlers.
-     * Here we change update the motion sensor trigger states on and off every 10 seconds
-     * the `updateCharacteristic` method.
-     *
-     */
-    let motionDetected = false;
-    setInterval(() => {
-      // EXAMPLE - inverse the trigger
-      motionDetected = !motionDetected;
-
-      // push the new value to HomeKit
-      motionSensorOneService.updateCharacteristic(this.platform.Characteristic.MotionDetected, motionDetected);
-      motionSensorTwoService.updateCharacteristic(this.platform.Characteristic.MotionDetected, !motionDetected);
-
-      this.platform.log.debug('Triggering motionSensorOneService:', motionDetected);
-      this.platform.log.debug('Triggering motionSensorTwoService:', !motionDetected);
-    }, 10000);
+    this.service
+      .updateCharacteristic(this.platform.Characteristic.CurrentDoorState, this.garageCurrentDoorState)
+      .updateCharacteristic(this.platform.Characteristic.TargetDoorState, this.garageTargetDoorState)
+      .updateCharacteristic(this.platform.Characteristic.ObstructionDetected, false);
   }
 
-  /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, turning on a Light bulb.
-   */
-  async setOn(value: CharacteristicValue) {
-    // implement your own code to turn your device on/off
-    this.exampleStates.On = value as boolean;
+  private ensureService(): Service {
+    const isRoller = this.context.kind === 'rollerShutter';
 
-    this.platform.log.debug('Set Characteristic On ->', value);
+    const staleService = isRoller
+      ? this.accessory.getService(this.platform.Service.GarageDoorOpener)
+      : this.accessory.getService(this.platform.Service.WindowCovering);
+
+    if (staleService) {
+      this.accessory.removeService(staleService);
+    }
+
+    const service = isRoller
+      ? this.accessory.getService(this.platform.Service.WindowCovering) || this.accessory.addService(this.platform.Service.WindowCovering)
+      : this.accessory.getService(this.platform.Service.GarageDoorOpener) || this.accessory.addService(this.platform.Service.GarageDoorOpener);
+
+    service.setCharacteristic(this.platform.Characteristic.Name, this.context.label);
+
+    return service;
   }
 
-  /**
-   * Handle the "GET" requests from HomeKit
-   * These are sent when HomeKit wants to know the current state of the accessory, for example, checking if a Light bulb is on.
-   *
-   * GET requests should return as fast as possible. A long delay here will result in
-   * HomeKit being unresponsive and a bad user experience in general.
-   *
-   * If your device takes time to respond you should update the status of your device
-   * asynchronously instead using the `updateCharacteristic` method instead.
-   * In this case, you may decide not to implement `onGet` handlers, which may speed up
-   * the responsiveness of your device in the Home app.
+  private configureHandlers(): void {
+    if (this.context.kind === 'rollerShutter') {
+      this.service.getCharacteristic(this.platform.Characteristic.CurrentPosition)
+        .onGet(async () => this.rollerCurrentPosition);
 
-   * @example
-   * this.service.updateCharacteristic(this.platform.Characteristic.On, true)
-   */
-  async getOn(): Promise<CharacteristicValue> {
-    // implement your own code to check if the device is on
-    const isOn = this.exampleStates.On;
+      this.service.getCharacteristic(this.platform.Characteristic.TargetPosition)
+        .onGet(async () => this.rollerTargetPosition)
+        .onSet(this.setRollerTargetPosition.bind(this));
 
-    this.platform.log.debug('Get Characteristic On ->', isOn);
+      this.service.getCharacteristic(this.platform.Characteristic.PositionState)
+        .onGet(async () => this.rollerPositionState);
 
-    // if you need to return an error to show the device as "Not Responding" in the Home app:
-    // throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      return;
+    }
 
-    return isOn;
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentDoorState)
+      .onGet(async () => this.garageCurrentDoorState);
+
+    this.service.getCharacteristic(this.platform.Characteristic.TargetDoorState)
+      .onGet(async () => this.garageTargetDoorState)
+      .onSet(this.setGarageTargetDoorState.bind(this));
+
+    this.service.getCharacteristic(this.platform.Characteristic.ObstructionDetected)
+      .onGet(async () => false);
   }
 
-  /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, changing the Brightness
-   */
-  async setBrightness(value: CharacteristicValue) {
-    // implement your own code to set the brightness
-    this.exampleStates.Brightness = value as number;
+  private async setRollerTargetPosition(value: CharacteristicValue): Promise<void> {
+    const targetPosition = typeof value === 'number' ? value : Number(value);
+    const shouldOpen = targetPosition > 0;
 
-    this.platform.log.debug('Set Characteristic Brightness -> ', value);
+    this.rollerTargetPosition = shouldOpen ? 100 : 0;
+    this.rollerPositionState = shouldOpen
+      ? this.platform.Characteristic.PositionState.INCREASING
+      : this.platform.Characteristic.PositionState.DECREASING;
+
+    this.service
+      .updateCharacteristic(this.platform.Characteristic.TargetPosition, this.rollerTargetPosition)
+      .updateCharacteristic(this.platform.Characteristic.PositionState, this.rollerPositionState);
+
+    try {
+      await this.platform.executeDeviceCommand(this.context.deviceURL, shouldOpen ? this.context.commands.open : this.context.commands.close);
+      await this.platform.refreshNow();
+    } catch (error) {
+      this.platform.log.error(`Failed to execute roller command for ${this.context.label}: ${(error as Error).message}`);
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    }
+  }
+
+  private async setGarageTargetDoorState(value: CharacteristicValue): Promise<void> {
+    const target = typeof value === 'number' ? value : Number(value);
+    const shouldOpen = target === this.platform.Characteristic.TargetDoorState.OPEN;
+
+    this.garageTargetDoorState = shouldOpen
+      ? this.platform.Characteristic.TargetDoorState.OPEN
+      : this.platform.Characteristic.TargetDoorState.CLOSED;
+
+    this.garageCurrentDoorState = shouldOpen
+      ? this.platform.Characteristic.CurrentDoorState.OPENING
+      : this.platform.Characteristic.CurrentDoorState.CLOSING;
+
+    this.service
+      .updateCharacteristic(this.platform.Characteristic.TargetDoorState, this.garageTargetDoorState)
+      .updateCharacteristic(this.platform.Characteristic.CurrentDoorState, this.garageCurrentDoorState);
+
+    try {
+      await this.platform.executeDeviceCommand(this.context.deviceURL, shouldOpen ? this.context.commands.open : this.context.commands.close);
+      await this.platform.refreshNow();
+    } catch (error) {
+      this.platform.log.error(`Failed to execute garage command for ${this.context.label}: ${(error as Error).message}`);
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    }
+  }
+
+  private toGarageCurrentDoorState(value: 'open' | 'closed' | 'opening' | 'closing' | 'stopped'): CharacteristicValue {
+    if (value === 'open') {
+      return this.platform.Characteristic.CurrentDoorState.OPEN;
+    }
+
+    if (value === 'closed') {
+      return this.platform.Characteristic.CurrentDoorState.CLOSED;
+    }
+
+    if (value === 'opening') {
+      return this.platform.Characteristic.CurrentDoorState.OPENING;
+    }
+
+    if (value === 'closing') {
+      return this.platform.Characteristic.CurrentDoorState.CLOSING;
+    }
+
+    return this.platform.Characteristic.CurrentDoorState.STOPPED;
+  }
+
+  private toGarageTargetDoorState(value: 'open' | 'closed'): CharacteristicValue {
+    return value === 'open'
+      ? this.platform.Characteristic.TargetDoorState.OPEN
+      : this.platform.Characteristic.TargetDoorState.CLOSED;
   }
 }

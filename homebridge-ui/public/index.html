@@ -1,0 +1,709 @@
+<div class="container-fluid px-0">
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+      <h3 class="mb-3" id="wizard-title"></h3>
+      <p class="text-muted mb-4" id="wizard-subtitle"></p>
+
+      <div class="mb-4">
+        <div class="d-flex flex-wrap gap-2" id="steps-indicator"></div>
+      </div>
+
+      <section data-step="1" class="wizard-step">
+        <h5 id="step1-title"></h5>
+        <p id="step1-text1"></p>
+        <ol>
+          <li id="step1-item1"></li>
+          <li id="step1-item2"></li>
+          <li id="step1-item3"></li>
+        </ol>
+        <a href="https://github.com/Somfy-Developer/Somfy-TaHoma-Developer-Mode" target="_blank" rel="noopener" id="step1-link"></a>
+      </section>
+
+      <section data-step="2" class="wizard-step d-none">
+        <h5 id="step2-title"></h5>
+        <p id="step2-text"></p>
+
+        <div class="d-flex gap-2 flex-wrap mb-3">
+          <button class="btn btn-primary" id="discover-button" type="button"></button>
+          <span class="text-muted align-self-center" id="discover-status"></span>
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label" for="gateway-select" id="gateway-select-label"></label>
+          <select class="form-select" id="gateway-select"></select>
+          <div class="form-text" id="gateway-select-help"></div>
+        </div>
+
+        <div class="mb-2" id="manual-host-wrapper">
+          <label class="form-label" for="host-input" id="host-label"></label>
+          <input class="form-control" id="host-input" type="text" placeholder="192.168.1.100" />
+          <div class="form-text" id="host-help"></div>
+        </div>
+      </section>
+
+      <section data-step="3" class="wizard-step d-none">
+        <h5 id="step3-title"></h5>
+        <p id="step3-text1"></p>
+        <ol>
+          <li id="step3-item1"></li>
+          <li id="step3-item2"></li>
+          <li id="step3-item3"></li>
+        </ol>
+
+        <div class="mb-2">
+          <label class="form-label" for="token-input" id="token-label"></label>
+          <input class="form-control" id="token-input" type="text" autocomplete="off" />
+        </div>
+      </section>
+
+      <section data-step="4" class="wizard-step d-none">
+        <h5 id="step4-title"></h5>
+        <p id="step4-text"></p>
+
+        <div class="d-flex gap-2 flex-wrap mb-3">
+          <button class="btn btn-primary" id="validate-button" type="button"></button>
+          <span class="text-muted align-self-center" id="validate-status"></span>
+        </div>
+
+        <div id="validation-result"></div>
+      </section>
+
+      <section data-step="5" class="wizard-step d-none">
+        <h5 id="step5-title"></h5>
+        <p id="step5-text"></p>
+        <div id="ignore-list"></div>
+      </section>
+
+      <div class="d-flex justify-content-between mt-4">
+        <button class="btn btn-outline-secondary" id="prev-button" type="button"></button>
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" id="next-button" type="button"></button>
+          <button class="btn btn-success d-none" id="save-button" type="button"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .step-chip {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.85rem;
+  }
+
+  .step-chip.active {
+    border-color: var(--bs-primary);
+    color: var(--bs-primary);
+    font-weight: 600;
+  }
+
+  .wizard-step {
+    min-height: 240px;
+  }
+
+  .device-card {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+</style>
+
+<script>
+(() => {
+  const I18N = {
+    en: {
+      wizardTitle: 'Somfy TaHoma Setup Wizard',
+      wizardSubtitle: 'Discover your gateway, verify token access, and select which devices to expose in HomeKit.',
+      stepTitle: ['1. Developer Mode', '2. Discover Gateway', '3. Token', '4. Validate Connection', '5. Advanced Device Filter'],
+      step1Title: 'Enable Developer Mode',
+      step1Text1: 'Developer Mode must be active on your TaHoma box before local API access works.',
+      step1Item1: 'Open the TaHoma by Somfy mobile app.',
+      step1Item2: 'Go to your gateway settings.',
+      step1Item3: 'Tap 7 times on the gateway PIN to unlock Developer Mode.',
+      step1Link: 'Open official TaHoma Developer Mode guide (GitHub)',
+      step2Title: 'Discover via mDNS (_kizboxdev._tcp)',
+      step2Text: 'Discovery keeps services with a type starting with "kizbox". If needed, use manual host/IP.',
+      discoverButton: 'Discover Gateways',
+      discoverIdle: '',
+      discoverRunning: 'Discovery in progress...',
+      discoverNone: 'No gateway found. Use manual host/IP input.',
+      discoverFound: 'Gateway discovery completed.',
+      gatewaySelectLabel: 'Discovered gateway',
+      gatewaySelectHelp: 'Select a discovered gateway, or choose the manual option.',
+      gatewaySelectPlaceholder: 'Select a discovered gateway',
+      gatewaySelectManualOption: 'Other IP / Manual entry',
+      hostLabel: 'Gateway host / IP',
+      hostHelp: 'You can enter hostname or IP. Port 8443 is used by default.',
+      step3Title: 'Paste Developer Token',
+      step3Text1: 'Generate the token in the TaHoma app Developer Mode menu, then paste it here.',
+      step3Item1: 'Open Developer Mode in the app.',
+      step3Item2: 'Generate a new token.',
+      step3Item3: 'Copy it immediately (it is only shown when created).',
+      tokenLabel: 'Developer token',
+      step4Title: 'Validate Local API Access',
+      step4Text: 'Validation calls GET /setup/devices using HTTPS + strict Somfy CA.',
+      validateButton: 'Validate & Load Devices',
+      validateIdle: '',
+      validateRunning: 'Validation in progress...',
+      validateSuccess: 'Validation successful.',
+      validateErrorPrefix: 'Validation failed:',
+      supportedTitle: 'Supported devices (v1)',
+      unsupportedTitle: 'Unsupported devices (ignored)',
+      kindGarage: 'Garage Door',
+      kindRoller: 'Roller Shutter',
+      step5Title: 'Ignore Specific Devices',
+      step5Text: 'Unchecked devices will be added to HomeKit. Checked devices will be ignored and removed from HomeKit.',
+      noSupported: 'No supported devices found.',
+      previous: 'Previous',
+      next: 'Next',
+      save: 'Save Configuration',
+      needHost: 'Please provide a gateway host/IP before continuing.',
+      needToken: 'Please provide a token before continuing.',
+      needValidation: 'Please validate the connection before continuing.',
+      saveSuccessTitle: 'Configuration saved',
+      saveSuccessMessage: 'TaHoma configuration saved. Restart Homebridge if required.',
+      saveErrorPrefix: 'Save failed:',
+      discoveredGatewayLabel: 'Gateway',
+      pinLabel: 'PIN',
+      apiLabel: 'API',
+      firmwareLabel: 'Firmware',
+      includeLabel: 'Include in HomeKit',
+      unsupportedReason: 'Reason',
+    },
+    fr: {
+      wizardTitle: 'Assistant de configuration Somfy TaHoma',
+      wizardSubtitle: 'Découvrez votre box, validez le token local, puis choisissez les appareils à exposer dans HomeKit.',
+      stepTitle: ['1. Mode développeur', '2. Découverte box', '3. Token', '4. Validation connexion', '5. Filtre avancé appareils'],
+      step1Title: 'Activer le mode développeur',
+      step1Text1: 'Le mode développeur doit être actif sur votre box TaHoma pour utiliser l\'API locale.',
+      step1Item1: 'Ouvrez l\'application mobile TaHoma by Somfy.',
+      step1Item2: 'Allez dans les paramètres de la box.',
+      step1Item3: 'Touchez 7 fois le PIN de la box pour activer le mode développeur.',
+      step1Link: 'Ouvrir le guide officiel TaHoma Developer Mode (GitHub)',
+      step2Title: 'Découverte via mDNS (_kizboxdev._tcp)',
+      step2Text: 'La découverte conserve les services dont le type commence par \"kizbox\". Si besoin, saisissez l\'hôte/IP manuellement.',
+      discoverButton: 'Découvrir les box',
+      discoverIdle: '',
+      discoverRunning: 'Découverte en cours...',
+      discoverNone: 'Aucune box trouvée. Utilisez la saisie manuelle hôte/IP.',
+      discoverFound: 'Découverte terminée.',
+      gatewaySelectLabel: 'Box découverte',
+      gatewaySelectHelp: 'Sélectionnez une box détectée, ou choisissez la saisie manuelle.',
+      gatewaySelectPlaceholder: 'Sélectionner une box découverte',
+      gatewaySelectManualOption: 'Autre IP / saisie manuelle',
+      hostLabel: 'Hôte / IP de la box',
+      hostHelp: 'Vous pouvez saisir un hostname ou une IP. Le port 8443 est utilisé par défaut.',
+      step3Title: 'Coller le token développeur',
+      step3Text1: 'Générez le token dans le menu Developer Mode de l\'app TaHoma, puis collez-le ici.',
+      step3Item1: 'Ouvrez Developer Mode dans l\'application.',
+      step3Item2: 'Générez un nouveau token.',
+      step3Item3: 'Copiez-le immédiatement (visible uniquement à la création).',
+      tokenLabel: 'Token développeur',
+      step4Title: 'Valider l\'accès API locale',
+      step4Text: 'La validation appelle GET /setup/devices en HTTPS avec CA Somfy stricte.',
+      validateButton: 'Valider & charger les appareils',
+      validateIdle: '',
+      validateRunning: 'Validation en cours...',
+      validateSuccess: 'Validation réussie.',
+      validateErrorPrefix: 'Échec validation :',
+      supportedTitle: 'Appareils supportés (v1)',
+      unsupportedTitle: 'Appareils non supportés (ignorés)',
+      kindGarage: 'Porte de garage',
+      kindRoller: 'Volet roulant',
+      step5Title: 'Ignorer des appareils spécifiques',
+      step5Text: 'Les appareils décochés seront ajoutés à HomeKit. Les appareils cochés seront ignorés et retirés de HomeKit.',
+      noSupported: 'Aucun appareil supporté détecté.',
+      previous: 'Précédent',
+      next: 'Suivant',
+      save: 'Enregistrer la configuration',
+      needHost: 'Veuillez renseigner un hôte/IP avant de continuer.',
+      needToken: 'Veuillez renseigner un token avant de continuer.',
+      needValidation: 'Veuillez valider la connexion avant de continuer.',
+      saveSuccessTitle: 'Configuration enregistrée',
+      saveSuccessMessage: 'Configuration TaHoma enregistrée. Redémarrez Homebridge si nécessaire.',
+      saveErrorPrefix: 'Échec enregistrement :',
+      discoveredGatewayLabel: 'Box',
+      pinLabel: 'PIN',
+      apiLabel: 'API',
+      firmwareLabel: 'Firmware',
+      includeLabel: 'Inclure dans HomeKit',
+      unsupportedReason: 'Raison',
+    },
+  };
+
+  const state = {
+    lang: 'en',
+    step: 1,
+    pluginAlias: 'SomfyTaHoma',
+    configBlock: null,
+    discovered: [],
+    host: '',
+    token: '',
+    validated: false,
+    validationResult: null,
+    ignoredDeviceUrls: new Set(),
+  };
+
+  const el = {
+    title: document.getElementById('wizard-title'),
+    subtitle: document.getElementById('wizard-subtitle'),
+    stepIndicator: document.getElementById('steps-indicator'),
+    gatewaySelect: document.getElementById('gateway-select'),
+    manualHostWrapper: document.getElementById('manual-host-wrapper'),
+    hostInput: document.getElementById('host-input'),
+    tokenInput: document.getElementById('token-input'),
+    discoverButton: document.getElementById('discover-button'),
+    discoverStatus: document.getElementById('discover-status'),
+    validateButton: document.getElementById('validate-button'),
+    validateStatus: document.getElementById('validate-status'),
+    validationResult: document.getElementById('validation-result'),
+    ignoreList: document.getElementById('ignore-list'),
+    prevButton: document.getElementById('prev-button'),
+    nextButton: document.getElementById('next-button'),
+    saveButton: document.getElementById('save-button'),
+  };
+
+  function t(key) {
+    const dict = I18N[state.lang] || I18N.en;
+    return dict[key] ?? key;
+  }
+
+  function kindLabel(kind) {
+    if (kind === 'garageDoor') {
+      return t('kindGarage');
+    }
+
+    if (kind === 'rollerShutter') {
+      return t('kindRoller');
+    }
+
+    return kind;
+  }
+
+  function setText(id, value) {
+    const node = document.getElementById(id);
+    if (node) {
+      node.textContent = value;
+    }
+  }
+
+  function setLocalizedTexts() {
+    el.title.textContent = t('wizardTitle');
+    el.subtitle.textContent = t('wizardSubtitle');
+
+    setText('step1-title', t('step1Title'));
+    setText('step1-text1', t('step1Text1'));
+    setText('step1-item1', t('step1Item1'));
+    setText('step1-item2', t('step1Item2'));
+    setText('step1-item3', t('step1Item3'));
+    setText('step1-link', t('step1Link'));
+
+    setText('step2-title', t('step2Title'));
+    setText('step2-text', t('step2Text'));
+    setText('gateway-select-label', t('gatewaySelectLabel'));
+    setText('gateway-select-help', t('gatewaySelectHelp'));
+    setText('host-label', t('hostLabel'));
+    setText('host-help', t('hostHelp'));
+
+    setText('step3-title', t('step3Title'));
+    setText('step3-text1', t('step3Text1'));
+    setText('step3-item1', t('step3Item1'));
+    setText('step3-item2', t('step3Item2'));
+    setText('step3-item3', t('step3Item3'));
+    setText('token-label', t('tokenLabel'));
+
+    setText('step4-title', t('step4Title'));
+    setText('step4-text', t('step4Text'));
+
+    setText('step5-title', t('step5Title'));
+    setText('step5-text', t('step5Text'));
+
+    el.discoverButton.textContent = t('discoverButton');
+    el.validateButton.textContent = t('validateButton');
+    el.prevButton.textContent = t('previous');
+    el.nextButton.textContent = t('next');
+    el.saveButton.textContent = t('save');
+
+    renderStepIndicator();
+  }
+
+  function renderStepIndicator() {
+    el.stepIndicator.innerHTML = '';
+
+    I18N[state.lang].stepTitle.forEach((label, index) => {
+      const chip = document.createElement('span');
+      chip.className = `step-chip ${state.step === index + 1 ? 'active' : ''}`;
+      chip.textContent = label;
+      el.stepIndicator.appendChild(chip);
+    });
+  }
+
+  function renderVisibleStep() {
+    const sections = document.querySelectorAll('.wizard-step');
+    sections.forEach((section) => {
+      const sectionStep = Number(section.getAttribute('data-step'));
+      section.classList.toggle('d-none', sectionStep !== state.step);
+    });
+
+    el.prevButton.disabled = state.step === 1;
+    el.nextButton.classList.toggle('d-none', state.step === 5);
+    el.saveButton.classList.toggle('d-none', state.step !== 5);
+    renderStepIndicator();
+  }
+
+  function setHost(value) {
+    state.host = value.trim();
+    el.hostInput.value = state.host;
+  }
+
+  function setToken(value) {
+    state.token = value.trim();
+    el.tokenInput.value = state.token;
+  }
+
+  function toGatewayHostValue(gateway) {
+    return gateway.port && gateway.port !== 8443
+      ? `${gateway.host}:${gateway.port}`
+      : gateway.host;
+  }
+
+  function updateManualHostVisibility() {
+    const selected = el.gatewaySelect.value;
+    const showManualHost = !state.discovered.length || selected === '__manual__' || selected === '';
+
+    el.manualHostWrapper.classList.toggle('d-none', !showManualHost);
+  }
+
+  function renderGatewaySelect() {
+    el.gatewaySelect.innerHTML = '';
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = t('gatewaySelectPlaceholder');
+    el.gatewaySelect.appendChild(placeholder);
+
+    let matchedCurrentHost = false;
+
+    state.discovered.forEach((gateway) => {
+      const hostWithPort = toGatewayHostValue(gateway);
+      const option = document.createElement('option');
+      option.value = hostWithPort;
+      option.textContent = `${gateway.name} (${hostWithPort})`;
+
+      if (state.host && state.host === hostWithPort) {
+        option.selected = true;
+        matchedCurrentHost = true;
+      }
+
+      el.gatewaySelect.appendChild(option);
+    });
+
+    const manualOption = document.createElement('option');
+    manualOption.value = '__manual__';
+    manualOption.textContent = t('gatewaySelectManualOption');
+    el.gatewaySelect.appendChild(manualOption);
+
+    if (!state.discovered.length || (state.host && !matchedCurrentHost)) {
+      el.gatewaySelect.value = '__manual__';
+    } else if (!state.host) {
+      el.gatewaySelect.value = '';
+    }
+
+    updateManualHostVisibility();
+  }
+
+  function renderValidationResult() {
+    el.validationResult.innerHTML = '';
+
+    if (!state.validationResult) {
+      return;
+    }
+
+    const supported = state.validationResult.supportedDevices || [];
+    const unsupported = state.validationResult.unsupportedDevices || [];
+
+    const root = document.createElement('div');
+
+    const supportedBlock = document.createElement('div');
+    supportedBlock.className = 'mb-3';
+    supportedBlock.innerHTML = `<h6>${t('supportedTitle')} (${supported.length})</h6>`;
+
+    if (!supported.length) {
+      const empty = document.createElement('div');
+      empty.className = 'text-muted';
+      empty.textContent = t('noSupported');
+      supportedBlock.appendChild(empty);
+    } else {
+      supported.forEach((device) => {
+        const card = document.createElement('div');
+        card.className = 'device-card';
+        card.innerHTML = `
+          <strong>${device.label}</strong><br>
+          <small class="text-muted">${kindLabel(device.kind)} | ${device.controllableName} | ${device.deviceURL}</small>
+        `;
+        supportedBlock.appendChild(card);
+      });
+    }
+
+    const unsupportedBlock = document.createElement('div');
+    unsupportedBlock.className = 'mb-2';
+    unsupportedBlock.innerHTML = `<h6>${t('unsupportedTitle')} (${unsupported.length})</h6>`;
+
+    unsupported.forEach((device) => {
+      const card = document.createElement('div');
+      card.className = 'device-card';
+      card.innerHTML = `
+        <strong>${device.label}</strong><br>
+        <small class="text-muted">${device.controllableName} | ${device.deviceURL}</small><br>
+        <small class="text-danger">${t('unsupportedReason')}: ${device.reason}</small>
+      `;
+      unsupportedBlock.appendChild(card);
+    });
+
+    root.appendChild(supportedBlock);
+    root.appendChild(unsupportedBlock);
+
+    el.validationResult.appendChild(root);
+  }
+
+  function renderIgnoreList() {
+    el.ignoreList.innerHTML = '';
+
+    const supported = state.validationResult?.supportedDevices || [];
+
+    if (!supported.length) {
+      el.ignoreList.innerHTML = `<div class="text-muted">${t('noSupported')}</div>`;
+      return;
+    }
+
+    supported.forEach((device, index) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'form-check device-card';
+
+      const checkboxId = `ignore-device-${index}`;
+      const isIgnored = state.ignoredDeviceUrls.has(device.deviceURL);
+
+      wrapper.innerHTML = `
+        <input class="form-check-input" type="checkbox" id="${checkboxId}" ${isIgnored ? 'checked' : ''}>
+        <label class="form-check-label" for="${checkboxId}">
+          <strong>${device.label}</strong><br>
+          <small class="text-muted">${kindLabel(device.kind)} | ${device.controllableName}</small><br>
+          <small class="text-muted">${device.deviceURL}</small>
+        </label>
+      `;
+
+      wrapper.querySelector('input').addEventListener('change', (event) => {
+        const checked = event.target.checked;
+
+        if (checked) {
+          state.ignoredDeviceUrls.add(device.deviceURL);
+        } else {
+          state.ignoredDeviceUrls.delete(device.deviceURL);
+        }
+      });
+
+      el.ignoreList.appendChild(wrapper);
+    });
+  }
+
+  async function discoverGateways() {
+    el.discoverStatus.textContent = t('discoverRunning');
+    el.discoverButton.disabled = true;
+
+    try {
+      const gateways = await homebridge.request('/discover', { timeoutMs: 3000 });
+      state.discovered = Array.isArray(gateways) ? gateways : [];
+
+      if (state.discovered.length === 0) {
+        el.discoverStatus.textContent = t('discoverNone');
+      } else {
+        el.discoverStatus.textContent = t('discoverFound');
+
+        if (!state.host) {
+          const first = state.discovered[0];
+          const hostWithPort = toGatewayHostValue(first);
+          setHost(hostWithPort);
+        }
+      }
+
+      renderGatewaySelect();
+    } catch (error) {
+      el.discoverStatus.textContent = `${t('validateErrorPrefix')} ${(error && error.message) ? error.message : String(error)}`;
+    } finally {
+      el.discoverButton.disabled = false;
+    }
+  }
+
+  async function validateConnection() {
+    if (!state.host) {
+      homebridge.toast.warning(t('needHost'));
+      return;
+    }
+
+    if (!state.token) {
+      homebridge.toast.warning(t('needToken'));
+      return;
+    }
+
+    el.validateStatus.textContent = t('validateRunning');
+    el.validateButton.disabled = true;
+
+    try {
+      state.validationResult = await homebridge.request('/validate', {
+        host: state.host,
+        token: state.token,
+      });
+      state.validated = true;
+      el.validateStatus.textContent = t('validateSuccess');
+
+      const supportedDeviceUrls = new Set((state.validationResult.supportedDevices || []).map((device) => device.deviceURL));
+      state.ignoredDeviceUrls = new Set([...state.ignoredDeviceUrls].filter((deviceURL) => supportedDeviceUrls.has(deviceURL)));
+
+      renderValidationResult();
+      renderIgnoreList();
+    } catch (error) {
+      state.validated = false;
+      state.validationResult = null;
+      renderValidationResult();
+      renderIgnoreList();
+      el.validateStatus.textContent = `${t('validateErrorPrefix')} ${(error && error.message) ? error.message : String(error)}`;
+    } finally {
+      el.validateButton.disabled = false;
+    }
+  }
+
+  function handleNext() {
+    if (state.step === 2 && !state.host) {
+      homebridge.toast.warning(t('needHost'));
+      return;
+    }
+
+    if (state.step === 3 && !state.token) {
+      homebridge.toast.warning(t('needToken'));
+      return;
+    }
+
+    if (state.step === 4 && !state.validated) {
+      homebridge.toast.warning(t('needValidation'));
+      return;
+    }
+
+    state.step = Math.min(5, state.step + 1);
+    renderVisibleStep();
+  }
+
+  function handlePrevious() {
+    state.step = Math.max(1, state.step - 1);
+    renderVisibleStep();
+  }
+
+  async function saveConfiguration() {
+    if (!state.validated) {
+      homebridge.toast.warning(t('needValidation'));
+      return;
+    }
+
+    const base = state.configBlock || {
+      platform: state.pluginAlias,
+      name: 'Somfy TaHoma',
+    };
+
+    const updated = {
+      ...base,
+      platform: state.pluginAlias,
+      ip: state.host,
+      token: state.token,
+      ignoredDeviceUrls: [...state.ignoredDeviceUrls],
+    };
+
+    try {
+      await homebridge.updatePluginConfig([updated]);
+      await homebridge.savePluginConfig();
+      homebridge.toast.success(t('saveSuccessMessage'), t('saveSuccessTitle'));
+    } catch (error) {
+      homebridge.toast.error(`${t('saveErrorPrefix')} ${(error && error.message) ? error.message : String(error)}`);
+    }
+  }
+
+  async function loadInitialConfig() {
+    const lang = await homebridge.i18nCurrentLang();
+    state.lang = lang && lang.toLowerCase().startsWith('fr') ? 'fr' : 'en';
+
+    const schema = await homebridge.getPluginConfigSchema();
+    state.pluginAlias = schema?.pluginAlias || 'SomfyTaHoma';
+
+    const blocks = await homebridge.getPluginConfig();
+    const matching = Array.isArray(blocks)
+      ? blocks.find((block) => block.platform === state.pluginAlias || block.platform === `${homebridge.plugin?.name}.${state.pluginAlias}`)
+      : null;
+
+    if (matching) {
+      state.configBlock = matching;
+      setHost(typeof matching.ip === 'string' ? matching.ip : '');
+      setToken(typeof matching.token === 'string' ? matching.token : '');
+
+      if (Array.isArray(matching.ignoredDeviceUrls)) {
+        state.ignoredDeviceUrls = new Set(matching.ignoredDeviceUrls.filter((value) => typeof value === 'string'));
+      }
+    }
+  }
+
+  async function bootstrap() {
+    homebridge.hideSchemaForm();
+
+    await loadInitialConfig();
+    setLocalizedTexts();
+
+    el.hostInput.value = state.host;
+    el.tokenInput.value = state.token;
+
+    el.discoverStatus.textContent = t('discoverIdle');
+    el.validateStatus.textContent = t('validateIdle');
+
+    renderGatewaySelect();
+    renderValidationResult();
+    renderIgnoreList();
+    renderVisibleStep();
+
+    el.gatewaySelect.addEventListener('change', (event) => {
+      const selected = event.target.value;
+
+      if (selected && selected !== '__manual__') {
+        setHost(selected);
+      }
+
+      if (!selected) {
+        setHost('');
+      }
+
+      state.validated = false;
+      updateManualHostVisibility();
+    });
+
+    el.hostInput.addEventListener('input', (event) => {
+      setHost(event.target.value);
+      state.validated = false;
+    });
+
+    el.tokenInput.addEventListener('input', (event) => {
+      setToken(event.target.value);
+      state.validated = false;
+    });
+
+    el.discoverButton.addEventListener('click', discoverGateways);
+    el.validateButton.addEventListener('click', validateConnection);
+    el.nextButton.addEventListener('click', handleNext);
+    el.prevButton.addEventListener('click', handlePrevious);
+    el.saveButton.addEventListener('click', saveConfiguration);
+  }
+
+  homebridge.addEventListener('ready', () => {
+    bootstrap().catch((error) => {
+      homebridge.toast.error(String(error));
+    });
+  });
+})();
+</script>

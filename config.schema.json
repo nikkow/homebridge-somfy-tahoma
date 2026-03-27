@@ -2,21 +2,36 @@
   "pluginAlias": "SomfyTaHoma",
   "pluginType": "platform",
   "singular": true,
+  "customUi": true,
   "strictValidation": false,
   "schema": {
     "type": "object",
     "required": ["ip", "token"],
     "additionalProperties": false,
     "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "default": "Somfy TaHoma"
+      },
       "ip": {
-        "title": "TaHoma Platform IP",
+        "title": "TaHoma Host / IP",
         "type": "string",
         "placeholder": "192.168.1.100"
       },
       "token": {
         "title": "TaHoma Platform Token",
         "type": "string",
-        "placeholder": "abcdef1234567890"
+        "minLength": 1,
+        "placeholder": "paste-token-generated-in-tahoma-app"
+      },
+      "ignoredDeviceUrls": {
+        "title": "Ignored Device URLs",
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": []
       }
     }
   }

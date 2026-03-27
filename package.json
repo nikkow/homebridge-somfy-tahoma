@@ -30,10 +30,13 @@
     "watch": "npm run build && npm link && nodemon"
   },
   "dependencies": {
+    "@homebridge/plugin-ui-utils": "^2.2.2",
+    "bonjour": "^3.5.1",
     "homebridge-lib": "^7.3.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/bonjour": "^3.5.13",
     "@types/node": "^25.5.0",
     "class-validator": "^0.15.1",
     "eslint": "^10.1.0",
