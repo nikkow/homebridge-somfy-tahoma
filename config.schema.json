@@ -1,17 +1,22 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "SomfyTaHoma",
   "pluginType": "platform",
   "singular": true,
   "strictValidation": false,
   "schema": {
     "type": "object",
-    "required": ["name"],
+    "required": ["ip", "token"],
     "additionalProperties": false,
     "properties": {
-      "name": {
-        "title": "Name",
+      "ip": {
+        "title": "TaHoma Platform IP",
         "type": "string",
-        "default": "Example Dynamic Platform"
+        "placeholder": "192.168.1.100"
+      },
+      "token": {
+        "title": "TaHoma Platform Token",
+        "type": "string",
+        "placeholder": "abcdef1234567890"
       }
     }
   }

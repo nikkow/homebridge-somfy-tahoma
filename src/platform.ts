@@ -61,6 +61,48 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
     this.accessories.set(accessory.UUID, accessory);
   }
 
+  private isKnownBridgeRaceError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+
+    return error.message.includes('while it was already bridged by')
+      || error.message.includes('Cannot find the bridged Accessory to remove.');
+  }
+
+  private registerAccessories(accessories: PlatformAccessory[]): void {
+    let shouldSyncCache = false;
+
+    try {
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, accessories);
+      shouldSyncCache = true;
+    } catch (error) {
+      if (this.isKnownBridgeRaceError(error)) {
+        this.log.warn(`Ignoring duplicate accessory registration from Homebridge runtime: ${(error as Error).message}`);
+        shouldSyncCache = true;
+      } else {
+        throw error;
+      }
+    }
+
+    if (shouldSyncCache) {
+      this.api.updatePlatformAccessories(accessories);
+    }
+  }
+
+  private unregisterAccessories(accessories: PlatformAccessory[]): void {
+    try {
+      this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, accessories);
+    } catch (error) {
+      if (this.isKnownBridgeRaceError(error)) {
+        this.log.warn(`Ignoring duplicate accessory unregistration from Homebridge runtime: ${(error as Error).message}`);
+        return;
+      }
+
+      throw error;
+    }
+  }
+
   /**
    * This is an example method showing how to register discovered accessories.
    * Accessories must only be registered once, previously created accessories
@@ -130,7 +172,8 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
         new ExamplePlatformAccessory(this, accessory);
 
         // link the accessory to your platform
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        this.accessories.set(uuid, accessory);
+        this.registerAccessories([accessory]);
       }
 
       // push into discoveredCacheUUIDs
@@ -143,7 +186,7 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
     for (const [uuid, accessory] of this.accessories) {
       if (!this.discoveredCacheUUIDs.includes(uuid)) {
         this.log.info('Removing existing accessory from cache:', accessory.displayName);
-        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        this.unregisterAccessories([accessory]);
       }
     }
   }
