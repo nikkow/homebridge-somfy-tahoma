@@ -71,23 +71,17 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
   }
 
   private registerAccessories(accessories: PlatformAccessory[]): void {
-    let shouldSyncCache = false;
-
     try {
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, accessories);
-      shouldSyncCache = true;
     } catch (error) {
       if (this.isKnownBridgeRaceError(error)) {
         this.log.warn(`Ignoring duplicate accessory registration from Homebridge runtime: ${(error as Error).message}`);
-        shouldSyncCache = true;
       } else {
         throw error;
       }
     }
 
-    if (shouldSyncCache) {
-      this.api.updatePlatformAccessories(accessories);
-    }
+    this.api.updatePlatformAccessories(accessories);
   }
 
   private unregisterAccessories(accessories: PlatformAccessory[]): void {
