@@ -4,8 +4,11 @@
       <h3 class="mb-3" id="wizard-title"></h3>
       <p class="text-muted mb-4" id="wizard-subtitle"></p>
 
-      <div class="mb-4">
-        <div class="d-flex flex-wrap gap-2" id="steps-indicator"></div>
+      <div class="mb-4 wizard-stepper" id="steps-wrapper">
+        <div class="wizard-stepper-track">
+          <div class="wizard-stepper-progress" id="steps-progress"></div>
+        </div>
+        <div class="wizard-stepper-items" id="steps-indicator" role="list"></div>
       </div>
 
       <section data-step="1" class="wizard-step">
@@ -86,17 +89,98 @@
 </div>
 
 <style>
-  .step-chip {
-    border: 1px solid var(--bs-border-color);
-    border-radius: 999px;
-    padding: 4px 10px;
-    font-size: 0.85rem;
+  .wizard-stepper {
+    --stepper-side-offset: 10%;
+    --stepper-top-padding: 8px;
+    --stepper-items-top-padding: 2px;
+    --stepper-marker-size: 32px;
+    position: relative;
+    padding-top: var(--stepper-top-padding);
   }
 
-  .step-chip.active {
+  .wizard-stepper-track {
+    position: absolute;
+    top: calc(var(--stepper-top-padding) + var(--stepper-items-top-padding) + (var(--stepper-marker-size) / 2));
+    left: var(--stepper-side-offset);
+    right: var(--stepper-side-offset);
+    height: 2px;
+    background-color: var(--bs-border-color);
+    z-index: 0;
+  }
+
+  .wizard-stepper-progress {
+    height: 100%;
+    width: 0;
+    background-color: var(--bs-primary);
+    transition: width 0.2s ease;
+  }
+
+  .wizard-stepper-items {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 0;
+    padding-top: var(--stepper-items-top-padding);
+    overflow: visible;
+  }
+
+  .stepper-item {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .stepper-marker {
+    width: var(--stepper-marker-size);
+    height: var(--stepper-marker-size);
+    border-radius: 50%;
+    border: 2px solid var(--bs-border-color);
+    background-color: var(--bs-body-bg);
+    color: var(--bs-secondary-color);
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+  }
+
+  .stepper-label {
+    width: 100%;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    text-align: center;
+    color: var(--bs-secondary-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .stepper-item.is-active .stepper-marker {
     border-color: var(--bs-primary);
     color: var(--bs-primary);
+    box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb), 0.2);
+  }
+
+  .stepper-item.is-active .stepper-label {
+    color: var(--bs-body-color);
     font-weight: 600;
+  }
+
+  .stepper-item.is-complete .stepper-marker {
+    border-color: var(--bs-primary);
+    background-color: var(--bs-primary);
+    color: #fff;
+  }
+
+  .stepper-item.is-complete .stepper-label {
+    color: var(--bs-body-color);
   }
 
   .wizard-step {
@@ -108,6 +192,23 @@
     border-radius: 8px;
     padding: 10px;
     margin-bottom: 8px;
+  }
+
+  .ignore-device-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .ignore-device-checkbox {
+    margin-top: 2px;
+    flex: 0 0 auto;
+  }
+
+  .ignore-device-label {
+    margin: 0;
+    min-width: 0;
+    cursor: pointer;
   }
 </style>
 
@@ -250,6 +351,8 @@
   const el = {
     title: document.getElementById('wizard-title'),
     subtitle: document.getElementById('wizard-subtitle'),
+    stepperWrapper: document.getElementById('steps-wrapper'),
+    stepProgress: document.getElementById('steps-progress'),
     stepIndicator: document.getElementById('steps-indicator'),
     gatewaySelect: document.getElementById('gateway-select'),
     manualHostWrapper: document.getElementById('manual-host-wrapper'),
@@ -333,11 +436,49 @@
   function renderStepIndicator() {
     el.stepIndicator.innerHTML = '';
 
-    I18N[state.lang].stepTitle.forEach((label, index) => {
-      const chip = document.createElement('span');
-      chip.className = `step-chip ${state.step === index + 1 ? 'active' : ''}`;
-      chip.textContent = label;
-      el.stepIndicator.appendChild(chip);
+    const labels = I18N[state.lang].stepTitle;
+    const totalSteps = labels.length;
+    const progress = totalSteps > 1
+      ? ((state.step - 1) / (totalSteps - 1)) * 100
+      : 0;
+
+    if (el.stepperWrapper) {
+      const sideOffset = totalSteps > 0 ? 50 / totalSteps : 0;
+      el.stepperWrapper.style.setProperty('--stepper-side-offset', `${sideOffset}%`);
+    }
+
+    if (el.stepProgress) {
+      el.stepProgress.style.width = `${progress}%`;
+    }
+
+    labels.forEach((label, index) => {
+      const stepNumber = index + 1;
+      const cleanLabel = label.replace(/^\d+\.\s*/, '');
+      const item = document.createElement('div');
+      item.className = 'stepper-item';
+      item.setAttribute('role', 'listitem');
+
+      if (stepNumber < state.step) {
+        item.classList.add('is-complete');
+      }
+
+      if (stepNumber === state.step) {
+        item.classList.add('is-active');
+      }
+
+      const marker = document.createElement('span');
+      marker.className = 'stepper-marker';
+      marker.textContent = String(stepNumber);
+      marker.setAttribute('aria-hidden', 'true');
+
+      const text = document.createElement('span');
+      text.className = 'stepper-label';
+      text.textContent = cleanLabel;
+      text.title = label;
+
+      item.appendChild(marker);
+      item.appendChild(text);
+      el.stepIndicator.appendChild(item);
     });
   }
 
@@ -481,14 +622,14 @@
 
     supported.forEach((device, index) => {
       const wrapper = document.createElement('div');
-      wrapper.className = 'form-check device-card';
+      wrapper.className = 'device-card ignore-device-card';
 
       const checkboxId = `ignore-device-${index}`;
       const isIgnored = state.ignoredDeviceUrls.has(device.deviceURL);
 
       wrapper.innerHTML = `
-        <input class="form-check-input" type="checkbox" id="${checkboxId}" ${isIgnored ? 'checked' : ''}>
-        <label class="form-check-label" for="${checkboxId}">
+        <input class="form-check-input ignore-device-checkbox" type="checkbox" id="${checkboxId}" ${isIgnored ? 'checked' : ''}>
+        <label class="form-check-label ignore-device-label" for="${checkboxId}">
           <strong>${device.label}</strong><br>
           <small class="text-muted">${kindLabel(device.kind)} | ${device.controllableName}</small><br>
           <small class="text-muted">${device.deviceURL}</small>
