@@ -5,6 +5,7 @@ import type { SupportedDeviceKind, TahomaDeviceCommandMap } from './tahoma/types
 export interface SomfyTahomaPlatformConfig extends PlatformConfig {
   ip?: string;
   token?: string;
+  pollIntervalSeconds?: number;
   ignoredDeviceUrls?: string[];
 }
 

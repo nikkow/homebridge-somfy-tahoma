@@ -14,7 +14,9 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { TahomaApiClient } from './tahoma/apiClient.js';
 import { classifyTahomaDevices, toAccessoryDisplayName } from './tahoma/deviceSupport.js';
 
-const POLL_INTERVAL_MS = 3_000;
+const DEFAULT_POLL_INTERVAL_SECONDS = 3;
+const MIN_POLL_INTERVAL_SECONDS = 1;
+const MAX_POLL_INTERVAL_SECONDS = 60;
 
 export class SomfyTahomaPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
@@ -41,8 +43,10 @@ export class SomfyTahomaPlatform implements DynamicPlatformPlugin {
 
     this.api.on('didFinishLaunching', () => {
       this.log.debug('Executed didFinishLaunching callback');
+      const pollIntervalMs = this.resolvePollingIntervalMs();
+      this.log.info(`TaHoma polling interval set to ${pollIntervalMs / 1000}s.`);
       this.queueSyncWithLogging();
-      this.pollTimer = setInterval(() => this.queueSyncWithLogging(), POLL_INTERVAL_MS);
+      this.pollTimer = setInterval(() => this.queueSyncWithLogging(), pollIntervalMs);
     });
 
     this.api.on('shutdown', () => {
@@ -188,6 +192,29 @@ export class SomfyTahomaPlatform implements DynamicPlatformPlugin {
       host: this.config.ip as string,
       token: this.config.token as string,
     });
+  }
+
+  private resolvePollingIntervalMs(): number {
+    const configured = (this.config as { pollIntervalSeconds?: unknown }).pollIntervalSeconds;
+
+    if (configured === undefined || configured === null) {
+      return DEFAULT_POLL_INTERVAL_SECONDS * 1000;
+    }
+
+    const numericValue = typeof configured === 'number' ? configured : Number(configured);
+    const isValid = Number.isInteger(numericValue)
+      && numericValue >= MIN_POLL_INTERVAL_SECONDS
+      && numericValue <= MAX_POLL_INTERVAL_SECONDS;
+
+    if (!isValid) {
+      this.log.warn(
+        `Invalid pollIntervalSeconds value "${String(configured)}". `
+        + `Using default ${DEFAULT_POLL_INTERVAL_SECONDS}s.`,
+      );
+      return DEFAULT_POLL_INTERVAL_SECONDS * 1000;
+    }
+
+    return numericValue * 1000;
   }
 
   private isKnownBridgeRaceError(error: unknown): boolean {

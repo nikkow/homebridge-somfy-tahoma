@@ -74,6 +74,15 @@
       <section data-step="5" class="wizard-step d-none">
         <h5 id="step5-title"></h5>
         <p id="step5-text"></p>
+        <div class="mb-4">
+          <h6 id="advanced-title"></h6>
+          <div class="mb-2">
+            <label class="form-label" for="poll-interval-input" id="poll-interval-label"></label>
+            <input class="form-control" id="poll-interval-input" type="number" min="1" max="60" step="1" />
+            <div class="form-text" id="poll-interval-help"></div>
+          </div>
+        </div>
+        <h6 id="ignore-list-title"></h6>
         <div id="ignore-list"></div>
       </section>
 
@@ -214,11 +223,15 @@
 
 <script>
 (() => {
+  const POLL_INTERVAL_MIN_SECONDS = 1;
+  const POLL_INTERVAL_MAX_SECONDS = 60;
+  const POLL_INTERVAL_DEFAULT_SECONDS = 3;
+
   const I18N = {
     en: {
       wizardTitle: 'Somfy TaHoma Setup Wizard',
       wizardSubtitle: 'Discover your gateway, verify token access, and select which devices to expose in HomeKit.',
-      stepTitle: ['1. Developer Mode', '2. Discover Gateway', '3. Token', '4. Validate Connection', '5. Advanced Device Filter'],
+      stepTitle: ['1. Developer Mode', '2. Discover Gateway', '3. Token', '4. Validate Connection', '5. Advanced Options'],
       step1Title: 'Enable Developer Mode',
       step1Text1: 'Developer Mode must be active on your TaHoma box before local API access works.',
       step1Item1: 'Open the TaHoma by Somfy mobile app.',
@@ -255,8 +268,13 @@
       unsupportedTitle: 'Unsupported devices (ignored)',
       kindGarage: 'Garage Door',
       kindRoller: 'Roller Shutter',
-      step5Title: 'Ignore Specific Devices',
-      step5Text: 'Unchecked devices will be added to HomeKit. Checked devices will be ignored and removed from HomeKit.',
+      step5Title: 'Advanced Options',
+      step5Text: 'Configure polling and choose which devices should be ignored in HomeKit.',
+      advancedTitle: 'Polling',
+      pollIntervalLabel: 'Polling delay (seconds)',
+      pollIntervalHelp: 'Integer between 1 and 60. Default: 3 seconds.',
+      invalidPollInterval: 'Polling delay must be an integer between 1 and 60 seconds.',
+      ignoreListTitle: 'Ignored Devices',
       noSupported: 'No supported devices found.',
       previous: 'Previous',
       next: 'Next',
@@ -277,7 +295,7 @@
     fr: {
       wizardTitle: 'Assistant de configuration Somfy TaHoma',
       wizardSubtitle: 'Découvrez votre box, validez le token local, puis choisissez les appareils à exposer dans HomeKit.',
-      stepTitle: ['1. Mode développeur', '2. Découverte box', '3. Token', '4. Validation connexion', '5. Filtre avancé appareils'],
+      stepTitle: ['1. Mode développeur', '2. Découverte box', '3. Token', '4. Validation connexion', '5. Options avancées'],
       step1Title: 'Activer le mode développeur',
       step1Text1: 'Le mode développeur doit être actif sur votre box TaHoma pour utiliser l\'API locale.',
       step1Item1: 'Ouvrez l\'application mobile TaHoma by Somfy.',
@@ -314,8 +332,13 @@
       unsupportedTitle: 'Appareils non supportés (ignorés)',
       kindGarage: 'Porte de garage',
       kindRoller: 'Volet roulant',
-      step5Title: 'Ignorer des appareils spécifiques',
-      step5Text: 'Les appareils décochés seront ajoutés à HomeKit. Les appareils cochés seront ignorés et retirés de HomeKit.',
+      step5Title: 'Options avancées',
+      step5Text: 'Configurez le polling et choisissez les appareils à ignorer dans HomeKit.',
+      advancedTitle: 'Polling',
+      pollIntervalLabel: 'Délai de polling (secondes)',
+      pollIntervalHelp: 'Entier entre 1 et 60. Valeur par défaut : 3 secondes.',
+      invalidPollInterval: 'Le délai de polling doit être un entier entre 1 et 60 secondes.',
+      ignoreListTitle: 'Appareils ignorés',
       noSupported: 'Aucun appareil supporté détecté.',
       previous: 'Précédent',
       next: 'Suivant',
@@ -343,6 +366,7 @@
     discovered: [],
     host: '',
     token: '',
+    pollIntervalSeconds: POLL_INTERVAL_DEFAULT_SECONDS,
     validated: false,
     validationResult: null,
     ignoredDeviceUrls: new Set(),
@@ -358,6 +382,7 @@
     manualHostWrapper: document.getElementById('manual-host-wrapper'),
     hostInput: document.getElementById('host-input'),
     tokenInput: document.getElementById('token-input'),
+    pollIntervalInput: document.getElementById('poll-interval-input'),
     discoverButton: document.getElementById('discover-button'),
     discoverStatus: document.getElementById('discover-status'),
     validateButton: document.getElementById('validate-button'),
@@ -423,6 +448,10 @@
 
     setText('step5-title', t('step5Title'));
     setText('step5-text', t('step5Text'));
+    setText('advanced-title', t('advancedTitle'));
+    setText('poll-interval-label', t('pollIntervalLabel'));
+    setText('poll-interval-help', t('pollIntervalHelp'));
+    setText('ignore-list-title', t('ignoreListTitle'));
 
     el.discoverButton.textContent = t('discoverButton');
     el.validateButton.textContent = t('validateButton');
@@ -503,6 +532,26 @@
   function setToken(value) {
     state.token = value.trim();
     el.tokenInput.value = state.token;
+  }
+
+  function setPollIntervalSeconds(value) {
+    state.pollIntervalSeconds = value;
+    el.pollIntervalInput.value = String(value);
+  }
+
+  function parsePollIntervalSeconds(rawValue) {
+    const normalized = String(rawValue ?? '').trim();
+
+    if (!normalized) {
+      return null;
+    }
+
+    const parsed = Number(normalized);
+    const isValid = Number.isInteger(parsed)
+      && parsed >= POLL_INTERVAL_MIN_SECONDS
+      && parsed <= POLL_INTERVAL_MAX_SECONDS;
+
+    return isValid ? parsed : null;
   }
 
   function toGatewayHostValue(gateway) {
@@ -747,6 +796,15 @@
       return;
     }
 
+    const pollIntervalSeconds = parsePollIntervalSeconds(el.pollIntervalInput.value);
+
+    if (pollIntervalSeconds === null) {
+      homebridge.toast.warning(t('invalidPollInterval'));
+      return;
+    }
+
+    state.pollIntervalSeconds = pollIntervalSeconds;
+
     const base = state.configBlock || {
       platform: state.pluginAlias,
       name: 'Somfy TaHoma',
@@ -757,6 +815,7 @@
       platform: state.pluginAlias,
       ip: state.host,
       token: state.token,
+      pollIntervalSeconds: state.pollIntervalSeconds,
       ignoredDeviceUrls: [...state.ignoredDeviceUrls],
     };
 
@@ -785,6 +844,11 @@
       state.configBlock = matching;
       setHost(typeof matching.ip === 'string' ? matching.ip : '');
       setToken(typeof matching.token === 'string' ? matching.token : '');
+      const configuredPollInterval = parsePollIntervalSeconds(matching.pollIntervalSeconds);
+
+      if (configuredPollInterval !== null) {
+        setPollIntervalSeconds(configuredPollInterval);
+      }
 
       if (Array.isArray(matching.ignoredDeviceUrls)) {
         state.ignoredDeviceUrls = new Set(matching.ignoredDeviceUrls.filter((value) => typeof value === 'string'));
@@ -800,6 +864,7 @@
 
     el.hostInput.value = state.host;
     el.tokenInput.value = state.token;
+    el.pollIntervalInput.value = String(state.pollIntervalSeconds);
 
     el.discoverStatus.textContent = t('discoverIdle');
     el.validateStatus.textContent = t('validateIdle');
@@ -832,6 +897,14 @@
     el.tokenInput.addEventListener('input', (event) => {
       setToken(event.target.value);
       state.validated = false;
+    });
+
+    el.pollIntervalInput.addEventListener('input', (event) => {
+      const pollIntervalSeconds = parsePollIntervalSeconds(event.target.value);
+
+      if (pollIntervalSeconds !== null) {
+        state.pollIntervalSeconds = pollIntervalSeconds;
+      }
     });
 
     el.discoverButton.addEventListener('click', discoverGateways);

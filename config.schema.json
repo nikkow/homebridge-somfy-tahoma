@@ -25,6 +25,13 @@
         "minLength": 1,
         "placeholder": "paste-token-generated-in-tahoma-app"
       },
+      "pollIntervalSeconds": {
+        "title": "Polling Delay (seconds)",
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 60,
+        "default": 3
+      },
       "ignoredDeviceUrls": {
         "title": "Ignored Device URLs",
         "type": "array",

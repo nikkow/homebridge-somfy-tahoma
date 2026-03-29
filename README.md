@@ -70,6 +70,7 @@ Minimal `config.json` platform block:
   "name": "Somfy TaHoma",
   "ip": "192.168.1.100",
   "token": "paste-token-generated-in-tahoma-app",
+  "pollIntervalSeconds": 3,
   "ignoredDeviceUrls": []
 }
 ```
@@ -78,11 +79,12 @@ Notes:
 
 - `ip` accepts IP, hostname, or HTTPS host format.
 - Default gateway port is `8443`.
+- `pollIntervalSeconds` is optional and controls sync frequency (integer `1..60`, default `3`).
 - `ignoredDeviceUrls` keeps selected devices out of HomeKit.
 
 ## What happens at runtime?
 
-- The plugin syncs devices every 3 seconds.
+- The plugin syncs devices using `pollIntervalSeconds` (default: 3 seconds).
 - New supported devices are added automatically.
 - Removed devices are cleaned from Homebridge cache.
 - Unsupported devices are skipped (debug logs explain why).
