@@ -5,6 +5,7 @@
 
 # Homebridge Somfy TaHoma
 
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=nikkow_homebridge-somfy-tahoma&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=nikkow_homebridge-somfy-tahoma)
 [![npm](https://img.shields.io/npm/v/homebridge-somfy-tahoma.svg)](https://www.npmjs.com/package/homebridge-somfy-tahoma)
 [![npm](https://img.shields.io/npm/dt/homebridge-somfy-tahoma.svg)](https://www.npmjs.com/package/homebridge-somfy-tahoma)
 ![license](https://img.shields.io/github/license/nikkow/homebridge-somfy-tahoma.svg)
