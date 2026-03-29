@@ -7,6 +7,11 @@ const SERVICE_TYPE_PREFIX = 'kizbox';
 const SERVICE_PROTOCOL = 'tcp';
 const DEFAULT_DISCOVERY_TIMEOUT_MS = 3000;
 
+export interface TahomaDiscoveryDependencies {
+  createBonjourInstance?: typeof bonjour;
+  setTimeoutFn?: typeof setTimeout;
+}
+
 function normalizeHost(host: string): string {
   return host.trim().replace(/\.$/, '');
 }
@@ -67,9 +72,15 @@ function mergeDiscoveryEntry(existing: TahomaDiscoveryResult, candidate: TahomaD
   };
 }
 
-export function discoverTahomaGateways(timeoutMs = DEFAULT_DISCOVERY_TIMEOUT_MS): Promise<TahomaDiscoveryResult[]> {
+export function discoverTahomaGateways(
+  timeoutMs = DEFAULT_DISCOVERY_TIMEOUT_MS,
+  dependencies: TahomaDiscoveryDependencies = {},
+): Promise<TahomaDiscoveryResult[]> {
   return new Promise((resolve) => {
-    const instance = bonjour();
+    const createBonjourInstance = dependencies.createBonjourInstance ?? bonjour;
+    const setTimeoutFn = dependencies.setTimeoutFn ?? setTimeout;
+
+    const instance = createBonjourInstance();
     const browser = instance.find({});
 
     const discoveredByIp = new Map<string, TahomaDiscoveryResult>();
@@ -122,6 +133,6 @@ export function discoverTahomaGateways(timeoutMs = DEFAULT_DISCOVERY_TIMEOUT_MS)
       discoveredByIp.set(ip, candidate);
     });
 
-    setTimeout(finalize, timeoutMs);
+    setTimeoutFn(finalize, timeoutMs);
   });
 }

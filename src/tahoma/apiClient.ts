@@ -18,12 +18,25 @@ const CERTIFICATE_RETRY_CODES = new Set([
   'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
   'ERR_TLS_CERT_ALTNAME_INVALID',
 ]);
-const STRICT_CA_BUNDLE = [OVERKIZ_ROOT_CA, ...rootCertificates];
 
 export interface TahomaApiClientOptions {
   host: string;
   token: string;
   timeoutMs?: number;
+}
+
+interface RequestTlsOptions {
+  ca?: string | string[];
+  checkServerIdentity?: (hostname: string, cert: PeerCertificate) => Error | undefined;
+  rejectUnauthorized?: boolean;
+  expectedPeerFingerprint256?: string;
+}
+
+export interface TahomaApiClientDependencies {
+  httpsRequest?: typeof httpsRequest;
+  tlsConnect?: typeof tlsConnect;
+  isIp?: typeof isIP;
+  rootCertificates?: string[];
 }
 
 interface GatewayAddress {
@@ -54,12 +67,20 @@ export class TahomaApiClient {
   private readonly gateway: GatewayAddress;
   private readonly token: string;
   private readonly timeoutMs: number;
+  private readonly httpsRequest: typeof httpsRequest;
+  private readonly tlsConnect: typeof tlsConnect;
+  private readonly isIp: typeof isIP;
+  private readonly strictCaBundle: string[];
   private pinnedPeerFingerprint256?: string;
 
-  constructor(options: TahomaApiClientOptions) {
+  constructor(options: TahomaApiClientOptions, dependencies: TahomaApiClientDependencies = {}) {
     this.gateway = normalizeGatewayHost(options.host);
     this.token = options.token.trim();
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.httpsRequest = dependencies.httpsRequest ?? httpsRequest;
+    this.tlsConnect = dependencies.tlsConnect ?? tlsConnect;
+    this.isIp = dependencies.isIp ?? isIP;
+    this.strictCaBundle = [OVERKIZ_ROOT_CA, ...(dependencies.rootCertificates ?? rootCertificates)];
 
     if (!this.token) {
       throw new Error('Gateway token is required');
@@ -96,7 +117,7 @@ export class TahomaApiClient {
   ): Promise<T> {
     try {
       return await this.requestJsonOnce<T>(path, options, {
-        ca: STRICT_CA_BUNDLE,
+        ca: this.strictCaBundle,
       });
     } catch (error) {
       if (this.shouldRetryWithDefaultTrustStore(error)) {
@@ -156,25 +177,20 @@ export class TahomaApiClient {
   private async requestJsonOnce<T = unknown>(
     path: string,
     options: { method: 'GET' | 'POST' | 'DELETE'; body?: unknown },
-    tlsOptions: {
-      ca?: string | string[];
-      checkServerIdentity?: (hostname: string, cert: PeerCertificate) => Error | undefined;
-      rejectUnauthorized?: boolean;
-      expectedPeerFingerprint256?: string;
-    },
+    tlsOptions: RequestTlsOptions,
   ): Promise<T> {
     const requestBody = options.body === undefined ? undefined : JSON.stringify(options.body);
     const requestPath = `${API_BASE_PATH}${path.startsWith('/') ? path : `/${path}`}`;
 
     return new Promise<T>((resolve, reject) => {
-      const req = httpsRequest({
+      const req = this.httpsRequest({
         hostname: this.gateway.hostname,
         port: this.gateway.port,
         path: requestPath,
         method: options.method,
         rejectUnauthorized: tlsOptions.rejectUnauthorized ?? true,
         ...tlsOptions,
-        ...(isIP(this.gateway.hostname) === 0
+        ...(this.isIp(this.gateway.hostname) === 0
           ? { servername: this.gateway.hostname }
           : {}),
         headers: {
@@ -248,11 +264,11 @@ export class TahomaApiClient {
     }
 
     await new Promise<void>((resolve, reject) => {
-      const socket = tlsConnect({
+      const socket = this.tlsConnect({
         host: this.gateway.hostname,
         port: this.gateway.port,
         rejectUnauthorized: false,
-        ...(isIP(this.gateway.hostname) === 0
+        ...(this.isIp(this.gateway.hostname) === 0
           ? { servername: this.gateway.hostname }
           : {}),
       });

@@ -12,9 +12,28 @@ import type { SomfyAccessoryContext, SomfyTahomaPlatformConfig } from './platfor
 import { SomfyTahomaAccessory } from './platformAccessory.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { TahomaApiClient } from './tahoma/apiClient.js';
+import type { TahomaDevice } from './tahoma/types.js';
 import { classifyTahomaDevices, toAccessoryDisplayName } from './tahoma/deviceSupport.js';
 
 const POLL_INTERVAL_MS = 3_000;
+
+interface TahomaClient {
+  getDevices(): Promise<TahomaDevice[]>;
+  executeCommand(deviceURL: string, commandName: string): Promise<void>;
+}
+
+interface TahomaClientFactoryOptions {
+  host: string;
+  token: string;
+}
+
+export interface SomfyTahomaPlatformDependencies {
+  createApiClient?: (options: TahomaClientFactoryOptions) => TahomaClient;
+  createAccessoryHandler?: (platform: SomfyTahomaPlatform, accessory: PlatformAccessory) => SomfyTahomaAccessory;
+  classifyDevices?: typeof classifyTahomaDevices;
+  setIntervalFn?: typeof setInterval;
+  clearIntervalFn?: typeof clearInterval;
+}
 
 export class SomfyTahomaPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
@@ -24,6 +43,7 @@ export class SomfyTahomaPlatform implements DynamicPlatformPlugin {
 
   private readonly accessoryHandlers: Map<string, SomfyTahomaAccessory> = new Map();
   private readonly config: SomfyTahomaPlatformConfig;
+  private readonly dependencies: Required<SomfyTahomaPlatformDependencies>;
   private syncQueue: Promise<void> = Promise.resolve();
   private pollTimer?: NodeJS.Timeout;
   private hasLoggedMissingConfig = false;
@@ -32,22 +52,30 @@ export class SomfyTahomaPlatform implements DynamicPlatformPlugin {
     public readonly log: Logging,
     rawConfig: PlatformConfig,
     public readonly api: API,
+    dependencies: SomfyTahomaPlatformDependencies = {},
   ) {
     this.config = rawConfig as SomfyTahomaPlatformConfig;
     this.Service = api.hap.Service;
     this.Characteristic = api.hap.Characteristic;
+    this.dependencies = {
+      createApiClient: dependencies.createApiClient ?? ((options) => new TahomaApiClient(options)),
+      createAccessoryHandler: dependencies.createAccessoryHandler ?? ((platform, accessory) => new SomfyTahomaAccessory(platform, accessory)),
+      classifyDevices: dependencies.classifyDevices ?? classifyTahomaDevices,
+      setIntervalFn: dependencies.setIntervalFn ?? setInterval,
+      clearIntervalFn: dependencies.clearIntervalFn ?? clearInterval,
+    };
 
     this.log.debug('Finished initializing platform:', this.config.name);
 
     this.api.on('didFinishLaunching', () => {
       this.log.debug('Executed didFinishLaunching callback');
       this.queueSyncWithLogging();
-      this.pollTimer = setInterval(() => this.queueSyncWithLogging(), POLL_INTERVAL_MS);
+      this.pollTimer = this.dependencies.setIntervalFn(() => this.queueSyncWithLogging(), POLL_INTERVAL_MS);
     });
 
     this.api.on('shutdown', () => {
       if (this.pollTimer) {
-        clearInterval(this.pollTimer);
+        this.dependencies.clearIntervalFn(this.pollTimer);
       }
     });
   }
@@ -96,7 +124,7 @@ export class SomfyTahomaPlatform implements DynamicPlatformPlugin {
 
     const client = this.createApiClient();
     const allDevices = await client.getDevices();
-    const classified = classifyTahomaDevices(allDevices);
+    const classified = this.dependencies.classifyDevices(allDevices);
     const ignoredDeviceUrls = this.getIgnoredDeviceUrls();
 
     if (classified.unsupported.length > 0) {
@@ -141,7 +169,7 @@ export class SomfyTahomaPlatform implements DynamicPlatformPlugin {
 
       this.accessories.set(uuid, accessory);
 
-      const handler = new SomfyTahomaAccessory(this, accessory);
+      const handler = this.dependencies.createAccessoryHandler(this, accessory);
       this.accessoryHandlers.set(uuid, handler);
       handler.updateStates(device.states);
 
@@ -169,7 +197,7 @@ export class SomfyTahomaPlatform implements DynamicPlatformPlugin {
       return existingHandler;
     }
 
-    const handler = new SomfyTahomaAccessory(this, accessory);
+    const handler = this.dependencies.createAccessoryHandler(this, accessory);
     this.accessoryHandlers.set(uuid, handler);
 
     return handler;
@@ -183,8 +211,8 @@ export class SomfyTahomaPlatform implements DynamicPlatformPlugin {
     return new Set(ignored);
   }
 
-  private createApiClient(): TahomaApiClient {
-    return new TahomaApiClient({
+  private createApiClient(): TahomaClient {
+    return this.dependencies.createApiClient({
       host: this.config.ip as string,
       token: this.config.token as string,
     });

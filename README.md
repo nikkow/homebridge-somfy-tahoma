@@ -114,6 +114,8 @@ If nothing appears in HomeKit:
 npm install
 npm run lint
 npm run build
+npm run test
+npm run test:coverage
 npm run watch
 ```
 
