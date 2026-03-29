@@ -47,11 +47,13 @@ export class SomfyTahomaAccessory {
 
       this.rollerCurrentPosition = mapped.currentPosition;
       this.rollerTargetPosition = mapped.targetPosition;
-      this.rollerPositionState = mapped.positionState === 'increasing'
-        ? this.platform.Characteristic.PositionState.INCREASING
-        : mapped.positionState === 'decreasing'
-          ? this.platform.Characteristic.PositionState.DECREASING
-          : this.platform.Characteristic.PositionState.STOPPED;
+      this.rollerPositionState = this.platform.Characteristic.PositionState.STOPPED;
+
+      if (mapped.positionState === 'increasing') {
+        this.rollerPositionState = this.platform.Characteristic.PositionState.INCREASING;
+      } else if (mapped.positionState === 'decreasing') {
+        this.rollerPositionState = this.platform.Characteristic.PositionState.DECREASING;
+      }
 
       this.service
         .updateCharacteristic(this.platform.Characteristic.CurrentPosition, this.rollerCurrentPosition)

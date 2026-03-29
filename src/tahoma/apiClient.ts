@@ -19,6 +19,7 @@ const CERTIFICATE_RETRY_CODES = new Set([
   'ERR_TLS_CERT_ALTNAME_INVALID',
 ]);
 const STRICT_CA_BUNDLE = [OVERKIZ_ROOT_CA, ...rootCertificates];
+type HttpMethod = 'GET' | 'POST' | 'DELETE';
 
 export interface TahomaApiClientOptions {
   host: string;
@@ -92,7 +93,7 @@ export class TahomaApiClient {
 
   private async requestJson<T = unknown>(
     path: string,
-    options: { method: 'GET' | 'POST' | 'DELETE'; body?: unknown },
+    options: { method: HttpMethod; body?: unknown },
   ): Promise<T> {
     try {
       return await this.requestJsonOnce<T>(path, options, {
@@ -109,7 +110,7 @@ export class TahomaApiClient {
 
   private async requestWithPinnedPeerCertificate<T = unknown>(
     path: string,
-    options: { method: 'GET' | 'POST' | 'DELETE'; body?: unknown },
+    options: { method: HttpMethod; body?: unknown },
   ): Promise<T> {
     await this.loadAndPinPeerCertificate();
 
@@ -155,7 +156,7 @@ export class TahomaApiClient {
 
   private async requestJsonOnce<T = unknown>(
     path: string,
-    options: { method: 'GET' | 'POST' | 'DELETE'; body?: unknown },
+    options: { method: HttpMethod; body?: unknown },
     tlsOptions: {
       ca?: string | string[];
       checkServerIdentity?: (hostname: string, cert: PeerCertificate) => Error | undefined;
@@ -164,7 +165,8 @@ export class TahomaApiClient {
     },
   ): Promise<T> {
     const requestBody = options.body === undefined ? undefined : JSON.stringify(options.body);
-    const requestPath = `${API_BASE_PATH}${path.startsWith('/') ? path : `/${path}`}`;
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    const requestPath = `${API_BASE_PATH}${normalizedPath}`;
 
     return new Promise<T>((resolve, reject) => {
       const req = httpsRequest({

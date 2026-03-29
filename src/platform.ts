@@ -208,13 +208,28 @@ export class SomfyTahomaPlatform implements DynamicPlatformPlugin {
 
     if (!isValid) {
       this.log.warn(
-        `Invalid pollIntervalSeconds value "${String(configured)}". `
+        `Invalid pollIntervalSeconds value "${this.formatConfigValueForLog(configured)}". `
         + `Using default ${DEFAULT_POLL_INTERVAL_SECONDS}s.`,
       );
       return DEFAULT_POLL_INTERVAL_SECONDS * 1000;
     }
 
     return numericValue * 1000;
+  }
+
+  private formatConfigValueForLog(value: unknown): string {
+    if (typeof value === 'object' && value !== null) {
+      try {
+        const serialized = JSON.stringify(value);
+        return typeof serialized === 'string'
+          ? serialized
+          : Object.prototype.toString.call(value);
+      } catch {
+        return Object.prototype.toString.call(value);
+      }
+    }
+
+    return String(value);
   }
 
   private isKnownBridgeRaceError(error: unknown): boolean {

@@ -58,7 +58,7 @@ function pickBestIp(service: bonjour.RemoteService): string | undefined {
 
 function mergeDiscoveryEntry(existing: TahomaDiscoveryResult, candidate: TahomaDiscoveryResult): TahomaDiscoveryResult {
   return {
-    name: existing.name !== 'TaHoma Gateway' ? existing.name : candidate.name,
+    name: existing.name === 'TaHoma Gateway' ? candidate.name : existing.name,
     host: existing.host,
     port: existing.port || candidate.port,
     gatewayPin: existing.gatewayPin ?? candidate.gatewayPin,

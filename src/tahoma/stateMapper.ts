@@ -20,9 +20,9 @@ function clampPercentage(value: number): number {
 }
 
 function findState(states: TahomaState[], names: string[]): TahomaState | undefined {
-  const wanted = names.map((name) => name.toLowerCase());
+  const wanted = new Set(names.map((name) => name.toLowerCase()));
 
-  return states.find((state) => wanted.includes(state.name.toLowerCase()));
+  return states.find((state) => wanted.has(state.name.toLowerCase()));
 }
 
 function getNumericValue(value: unknown): number | undefined {
@@ -60,8 +60,6 @@ export function mapRollerShutterState(states: TahomaState[]): RollerStateSnapsho
     currentPosition = clampPercentage(100 - closurePercentage);
   } else if (openClosed === 'open') {
     currentPosition = 100;
-  } else if (openClosed === 'closed') {
-    currentPosition = 0;
   }
 
   let positionState: RollerStateSnapshot['positionState'] = 'stopped';
@@ -76,11 +74,13 @@ export function mapRollerShutterState(states: TahomaState[]): RollerStateSnapsho
     positionState = 'decreasing';
   }
 
-  const targetPosition = positionState === 'increasing'
-    ? 100
-    : positionState === 'decreasing'
-      ? 0
-      : currentPosition;
+  let targetPosition = currentPosition;
+
+  if (positionState === 'increasing') {
+    targetPosition = 100;
+  } else if (positionState === 'decreasing') {
+    targetPosition = 0;
+  }
 
   return {
     currentPosition,

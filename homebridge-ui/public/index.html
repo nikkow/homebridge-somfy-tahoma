@@ -303,7 +303,7 @@
       step1Item3: 'Touchez 7 fois le PIN de la box pour activer le mode développeur.',
       step1Link: 'Ouvrir le guide officiel TaHoma Developer Mode (GitHub)',
       step2Title: 'Découverte via mDNS (_kizboxdev._tcp)',
-      step2Text: 'La découverte conserve les services dont le type commence par \"kizbox\". Si besoin, saisissez l\'hôte/IP manuellement.',
+      step2Text: 'La découverte conserve les services dont le type commence par "kizbox". Si besoin, saisissez l\'hôte/IP manuellement.',
       discoverButton: 'Découvrir les box',
       discoverIdle: '',
       discoverRunning: 'Découverte en cours...',
@@ -514,7 +514,7 @@
   function renderVisibleStep() {
     const sections = document.querySelectorAll('.wizard-step');
     sections.forEach((section) => {
-      const sectionStep = Number(section.getAttribute('data-step'));
+      const sectionStep = Number(section.dataset.step);
       section.classList.toggle('d-none', sectionStep !== state.step);
     });
 
@@ -621,12 +621,7 @@
     supportedBlock.className = 'mb-3';
     supportedBlock.innerHTML = `<h6>${t('supportedTitle')} (${supported.length})</h6>`;
 
-    if (!supported.length) {
-      const empty = document.createElement('div');
-      empty.className = 'text-muted';
-      empty.textContent = t('noSupported');
-      supportedBlock.appendChild(empty);
-    } else {
+    if (supported.length > 0) {
       supported.forEach((device) => {
         const card = document.createElement('div');
         card.className = 'device-card';
@@ -636,6 +631,11 @@
         `;
         supportedBlock.appendChild(card);
       });
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'text-muted';
+      empty.textContent = t('noSupported');
+      supportedBlock.appendChild(empty);
     }
 
     const unsupportedBlock = document.createElement('div');
@@ -664,39 +664,39 @@
 
     const supported = state.validationResult?.supportedDevices || [];
 
-    if (!supported.length) {
-      el.ignoreList.innerHTML = `<div class="text-muted">${t('noSupported')}</div>`;
+    if (supported.length > 0) {
+      supported.forEach((device, index) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'device-card ignore-device-card';
+
+        const checkboxId = `ignore-device-${index}`;
+        const isIgnored = state.ignoredDeviceUrls.has(device.deviceURL);
+
+        wrapper.innerHTML = `
+          <input class="form-check-input ignore-device-checkbox" type="checkbox" id="${checkboxId}" ${isIgnored ? 'checked' : ''}>
+          <label class="form-check-label ignore-device-label" for="${checkboxId}">
+            <strong>${device.label}</strong><br>
+            <small class="text-muted">${kindLabel(device.kind)} | ${device.controllableName}</small><br>
+            <small class="text-muted">${device.deviceURL}</small>
+          </label>
+        `;
+
+        wrapper.querySelector('input').addEventListener('change', (event) => {
+          const checked = event.target.checked;
+
+          if (checked) {
+            state.ignoredDeviceUrls.add(device.deviceURL);
+          } else {
+            state.ignoredDeviceUrls.delete(device.deviceURL);
+          }
+        });
+
+        el.ignoreList.appendChild(wrapper);
+      });
       return;
     }
 
-    supported.forEach((device, index) => {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'device-card ignore-device-card';
-
-      const checkboxId = `ignore-device-${index}`;
-      const isIgnored = state.ignoredDeviceUrls.has(device.deviceURL);
-
-      wrapper.innerHTML = `
-        <input class="form-check-input ignore-device-checkbox" type="checkbox" id="${checkboxId}" ${isIgnored ? 'checked' : ''}>
-        <label class="form-check-label ignore-device-label" for="${checkboxId}">
-          <strong>${device.label}</strong><br>
-          <small class="text-muted">${kindLabel(device.kind)} | ${device.controllableName}</small><br>
-          <small class="text-muted">${device.deviceURL}</small>
-        </label>
-      `;
-
-      wrapper.querySelector('input').addEventListener('change', (event) => {
-        const checked = event.target.checked;
-
-        if (checked) {
-          state.ignoredDeviceUrls.add(device.deviceURL);
-        } else {
-          state.ignoredDeviceUrls.delete(device.deviceURL);
-        }
-      });
-
-      el.ignoreList.appendChild(wrapper);
-    });
+    el.ignoreList.innerHTML = `<div class="text-muted">${t('noSupported')}</div>`;
   }
 
   async function discoverGateways() {
