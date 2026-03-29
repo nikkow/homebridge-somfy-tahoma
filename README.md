@@ -104,7 +104,8 @@ If nothing appears in HomeKit:
 
 ## Disclaimer
 
-This software is provided as-is. It can control real devices (doors, shutters). Use it carefully.
+> [!CAUTION]
+> This software is provided as-is. It can control real devices (doors, shutters). Use it carefully.
 
 ## Development
 
