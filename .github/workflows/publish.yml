@@ -6,7 +6,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 env:
   NODE_VERSION: 24.x
@@ -15,6 +14,8 @@ jobs:
   publish-beta:
     if: github.event.release.prerelease == true
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v6
 
@@ -46,6 +47,8 @@ jobs:
   publish-prod:
     if: github.event.release.prerelease == false
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v6
 
