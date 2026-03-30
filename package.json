@@ -2,7 +2,7 @@
   "name": "homebridge-somfy-tahoma",
   "displayName": "Somfy TaHoma",
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Homebridge plugin for interacting with the Somfy TaHoma box through its local API.",
   "author": "Nicolas NUNGE <nicolas@nicolasnunge.net>",
   "license": "Apache-2.0",
