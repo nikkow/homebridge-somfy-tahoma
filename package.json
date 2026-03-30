@@ -15,7 +15,14 @@
     "url": "https://github.com/nikkow/homebridge-somfy-tahoma/issues"
   },
   "keywords": [
-    "homebridge-plugin"
+    "homebridge-plugin",
+    "homebridge",
+    "homekit",
+    "somfy",
+    "tahoma",
+    "overkiz",
+    "roller-shutter",
+    "garage-door"
   ],
   "main": "dist/index.js",
   "engines": {
